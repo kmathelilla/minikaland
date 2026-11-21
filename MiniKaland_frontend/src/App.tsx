@@ -291,25 +291,6 @@ export default function App() {
           )}
         </form>
 
-        <section
-          className="gallery"
-          aria-label="Inspiráló játékos pillanatok"
-        >
-          {gallery.map((item, i) => (
-            <div
-              className="galleryItem"
-              key={item.src}
-              style={{ animationDelay: `${i * 100}ms` }}
-            >
-              <img
-                src={item.src}
-                alt={item.alt}
-                loading="lazy"
-              />
-            </div>
-          ))}
-        </section>
-
         {results !== null && (
           <section
             className="results"
@@ -359,48 +340,56 @@ export default function App() {
                   >
                     <img
                       src={resultImages[activity.category]}
-                      alt="Játékos illusztráció"
+                      alt=""
                     />
 
                     <div className="resultBody">
-                      <span className="resultCategory">
-                        {CATEGORY_LABELS[activity.category]}
-                      </span>
+                      <div className="resultTitle">
+                        <div>
+                          <span className="resultCategory">
+                            {CATEGORY_LABELS[activity.category]}
+                          </span>
+                          <h4>{activity.name}</h4>
+                        </div>
 
-                      <h4>{activity.name}</h4>
-                      <p>{activity.description}</p>
-
-                      <div className="metaRow">
-                        <Clock3 size={16} />
-                        {activity.duration} perc
-                        <span className="metaDot">·</span>
-                        {activity.ageMin}–{activity.ageMax} év
+                        <div className="metaRow">
+                          <Clock3 size={15} />
+                          {activity.duration} perc
+                          <span className="metaDot">·</span>
+                          {activity.ageMin}–{activity.ageMax} év
+                        </div>
                       </div>
 
-                      <p className="materials">
-                        <strong>Eszközök:</strong>{' '}
-                        {activity.materials.join(', ')}
+                      <p className="resultDescription">{activity.description}</p>
+
+                      <div className="activityColumns">
+                        <section className="activityColumn materialsColumn">
+                          <h5>Szükséges eszközök</h5>
+                          <ul>
+                            {activity.materials.map((material, index) => (
+                              <li key={`${index}-${material}`}>
+                                {material}
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+
+                        <section className="activityColumn stepsColumn">
+                          <h5>Hogyan játsszátok?</h5>
+                          <ol>
+                            {activity.steps.map((step, index) => (
+                              <li key={`${index}-${step}`}>
+                                {step}
+                              </li>
+                            ))}
+                          </ol>
+                        </section>
+                      </div>
+
+                      <p className="safety">
+                        <Info size={15} />
+                        {activity.safety}
                       </p>
-
-                      <details>
-                        <summary>
-                          Hogyan játsszátok?
-                          <ChevronRight size={17} />
-                        </summary>
-
-                        <ol>
-                          {activity.steps.map((step, index) => (
-                            <li key={`${index}-${step}`}>
-                              {step}
-                            </li>
-                          ))}
-                        </ol>
-
-                        <p className="safety">
-                          <Info size={15} />
-                          {activity.safety}
-                        </p>
-                      </details>
                     </div>
                   </article>
                 ))}
@@ -408,6 +397,25 @@ export default function App() {
             )}
           </section>
         )}
+
+        <section
+          className="gallery"
+          aria-label="Inspiráló játékos pillanatok"
+        >
+          {gallery.map((item, i) => (
+            <div
+              className="galleryItem"
+              key={item.src}
+              style={{ animationDelay: `${i * 100}ms` }}
+            >
+              <img
+                src={item.src}
+                alt={item.alt}
+                loading="lazy"
+              />
+            </div>
+          ))}
+        </section>
       </main>
 
       <footer className="footer">

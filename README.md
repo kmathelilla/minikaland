@@ -56,7 +56,32 @@ Open the local URL displayed in the terminal.
 
 ### Backend
 
-The Python FastAPI backend and Google Gemini integration are currently under development.
+Install dependencies from the project root:
+
+```powershell
+python -m pip install -r backend\requirements.txt
+```
+
+Set `GEMINI_API_KEY` in `backend\.env`, then start the API:
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m uvicorn main:app --reload
+```
+
+The API is available at `http://127.0.0.1:8000`. Check `GET /health`, or
+generate an activity with `POST /jatek`:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/jatek `
+  -ContentType "application/json" `
+  -Body '{"age":6,"duration":20,"theme":"erdő"}'
+```
+
+The request accepts ages 3–12, durations of 5–120 minutes, and a theme.
+The response contains a title, materials list, and exactly three activity
+steps. Run the mocked backend tests from the project root with
+`backend\.venv\Scripts\python.exe -m pytest backend`.
 
 ## Project Status
 

@@ -9,6 +9,8 @@ from google import genai
 from google.genai.errors import APIError
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from skills import SkillName, build_skill_instructions
+
 load_dotenv(Path(__file__).with_name(".env"))
 
 MODEL_NAME = "gemini-3.5-flash-lite"
@@ -16,8 +18,10 @@ MODEL_NAME = "gemini-3.5-flash-lite"
 app = FastAPI(title="MiniKaland API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=False,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
@@ -26,7 +30,8 @@ app.add_middleware(
 class ActivityRequest(BaseModel):
     age: Annotated[int, Field(ge=3, le=12)]
     duration: Annotated[int, Field(ge=5, le=120)]
-    theme: Annotated[str, Field(min_length=1, max_length=120)]
+    theme: Annotated[str, Field(min_length=1, max_length=280)]
+    skills: list[SkillName] = Field(default_factory=list)
 
     @field_validator("theme")
     @classmethod
@@ -57,6 +62,8 @@ def create_activity(request: ActivityRequest) -> ActivityResponse:
             detail="A tevékenységgenerálás jelenleg nem érhető el.",
         )
 
+    skill_instructions = build_skill_instructions(request.skills)
+
     prompt = (
         "Készíts pontosan egy biztonságos, Montessori-inspirált, "
         "otthon végezhető gyermektevékenységet magyarul. "
@@ -69,6 +76,7 @@ def create_activity(request: ActivityRequest) -> ActivityResponse:
         "utasításokat. "
         f"Kor: {request.age} év. Időtartam: {request.duration} perc. "
         f"Téma: {request.theme}."
+        f"\nAktivált skillek szakmai szabályai:\n{skill_instructions}"
     )
 
     try:
