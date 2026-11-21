@@ -1,9 +1,25 @@
-@'
+# API keys
 **/.env
 **/.env.*
 !**/.env.example
+
+# Python
 **/.venv/
+**/venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# React / Vite
 **/node_modules/
 **/dist/
-**/__pycache__/
-'@ | Set-Content .gitignore
+**/.vite/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
