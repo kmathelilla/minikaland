@@ -1,37 +1,65 @@
-# MiniKaland – React frontend
+# MiniKaland
 
-A jóváhagyott, világoskék/fehér, modern MiniKaland látványterv React + TypeScript + Vite megvalósítása.
+### AI-Powered Activity Planner for Kids
 
-## Indítás VS Code-ban
+MiniKaland is a web application designed to help parents discover creative, educational, and age-appropriate activities for their children.
 
-1. Telepítsd a Node.js LTS verzióját (ha nincs még).
-2. Nyisd meg a mappát VS Code-ban.
-3. Nyiss terminált (Terminal → New Terminal).
-4. Futtasd:
+The goal is simple: **turn everyday moments into meaningful adventures.**
+
+## Features
+
+- Personalized activity recommendations based on age and available time
+- Four activity categories: Montessori, Skill Development, Creative, and Physical Activities
+- Simple, modern, and responsive user interface
+- Activity suggestions with materials and instructions
+- AI-powered activity generation using Google Gemini *(planned)*
+
+## Tech Stack
+
+| Component | Technology |
+|---|---|
+| Frontend | React, TypeScript |
+| Backend | Python, FastAPI |
+| AI Model | Google Gemini API |
+| AI Skills | Four specialized SKILL.md modules |
+| Tools | Python function calling |
+| Development | VS Code, GitHub Copilot |
+| Version Control | Git, GitHub |
+
+## AI Architecture
+
+The planned AI system combines four specialized skills:
+
+1. **Montessori** – Independent, hands-on learning activities
+2. **Skill Development** – Cognitive and motor skill exercises
+3. **Creative** – Imaginative arts, crafts, and storytelling
+4. **Physical Activities** – Movement-based indoor and outdoor games
+
+Three custom tools will support activity discovery, material availability checks, and time planning.
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js and npm
+- Python 3.10 or newer (for the backend)
+
+### Frontend
 
 ```bash
+cd MiniKaland_frontend
 npm install
 npm run dev
 ```
 
-5. Nyisd meg a terminálban kapott helyi címet (alapesetben `http://localhost:5173`).
+Open the local URL displayed in the terminal.
 
-## Mit tud már?
+### Backend
 
-- Reszponzív, egylapos dizájn; eredeti jóváhagyott látványtervből kivágott saját illusztrációkkal.
-- Életkor, időkeret, szabad szavas szűrő és négy pipálható kategória.
-- Működő **demó**: 16 kurált mintaötletből az életkorhoz/időhöz/kategóriákhoz illeszkedő legjobb 3-at jeleníti meg.
-- A részletek kinyithatók: eszközlista, lépések, felügyeleti figyelmeztetés.
-- A `src/lib/api.ts` később közvetlenül a Python FastAPI + Gemini backendhez illeszthető.
+The Python FastAPI backend and Google Gemini integration are currently under development.
 
-## Fontos
+## Project Status
 
-**Gemini API még nincs bekötve.** A keresés jelenleg nem generatív, helyi mintaadatokat használ. A `VITE_API_BASE_URL`-t csak akkor töltsd ki, ha már fut a backend.
+**Work in progress.**
 
-A Gemini kulcsot **csak a Python backend `.env` fájlja** tartalmazhatja; React/Vite `VITE_` változóba soha ne írd!
-
-## Backend-szerződés a következő lépéshez
-
-`POST /api/recommend`, request: `{prompt:string, age:number, duration:number, location:"mindegy", categories:Category[]}`.
-
-Response: `{activities:Activity[], source:"gemini"}`. A típusok a `src/lib/activities.ts` és `src/lib/api.ts` fájlokban vannak.
+The initial React frontend and visual design are available
