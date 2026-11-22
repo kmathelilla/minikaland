@@ -7,6 +7,7 @@ export type Activity = {
   duration: number;
   ageMin: number;
   ageMax: number;
+  subtitle?: string;
   location: Exclude<Location,'mindegy'>;
   materials: string[];
   description: string;

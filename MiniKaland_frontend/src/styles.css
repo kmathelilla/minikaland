@@ -65,12 +65,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .demoNotice svg {flex-shrink:0;}
 .resultGrid { display:grid;grid-template-columns:minmax(0,1fr);gap:11px; }
 .resultCard { display:grid;grid-template-columns:112px minmax(0,1fr);align-items:stretch;background:white;border:1px solid #e3ecf6;border-radius:17px;overflow:hidden;box-shadow:0 5px 16px #284f7110; }
-.resultCard > img { display:block;width:112px;height:100%;min-height:144px;object-fit:cover; }
+.resultImageArea {position:relative;width:112px;min-height:144px;overflow:hidden;}
+.resultImageArea > img {position:absolute;inset:0;display:block;width:100%;height:100%;min-height:144px;object-fit:cover;}
 .resultBody {padding:13px 18px 12px;min-width:0;}
 .resultTitle {display:flex;align-items:center;justify-content:space-between;gap:16px;}
 .resultCategory {display:inline-block;padding:3px 8px;color:#5a8ab0;background:#edf6fd;border-radius:999px;font-size:11px;font-weight:600;}
 .resultBody h4 {font-size:19px;letter-spacing:-.02em;font-weight:600;margin:4px 0 0;color:#294564;}
 .resultBody .resultDescription {color:#647d96;margin:7px 0;line-height:1.4;font-size:13px;}
+.ratingStatus {color:#7790a8;font-size:10px;line-height:1.35;margin:4px 0;}
 .metaRow { display:flex;align-items:center;gap:6px;color:#7190aa;font-size:12px;white-space:nowrap; }
 .metaDot {margin:0 5px;}
 .activityColumns {display:grid;grid-template-columns: minmax(0,.8fr) minmax(0,1.2fr);gap:15px;margin-top:8px;}
@@ -79,8 +81,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .activityColumn ul,.activityColumn ol {color:#526e89;font-size:12px;line-height:1.35;margin:0;padding-left:17px;}
 .activityColumn li {margin:2px 0;}
 .stepsColumn {border-left:1px solid #e3ecf6;padding-left:15px;}
+.developmentRatings {margin-top:8px;padding-top:7px;border-top:1px solid #edf2f8;}
+.ratingDisclaimer {color:#7790a8;font-size:10px;line-height:1.3;margin:0 0 4px;}
+.ratingList {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;list-style:none;padding:0;margin:0;}
+.ratingList li {display:flex;align-items:baseline;justify-content:flex-start;gap:7px;color:#526e89;font-size:12px;line-height:1.3;}
+.ratingStars {flex:none;color:#6b9fca;letter-spacing:1px;white-space:nowrap;}
 .resultBody .safety {display:flex;gap:7px;color:#67809a;background:#f2f7fc;padding:7px 9px;border-radius:9px;font-size:11px;line-height:1.4;margin:8px 0 0;}
 .resultBody .safety svg {flex-shrink:0;}
+.adventureSheetTools {display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:9px;}
+.adventureSheetButton {display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid #d5e5f2;border-radius:10px;background:#f5faff;color:#426b8d;padding:8px 12px;font:inherit;font-size:12px;font-weight:600;transition:background .18s ease,border-color .18s ease;}
+.adventureSheetButton:hover:not(:disabled) {background:#eaf4fb;border-color:#b9d1e5;}
+.adventureSheetButton:disabled {cursor:wait;opacity:.7;}
+.adventureSheetError {color:#ab354d;font-size:11px;line-height:1.4;margin:0;}
 .emptyState { background:white; border:1px solid #dce8f5;padding:24px;border-radius:15px;color:#536e88; }
 .errorMessage {color:#ab354d;text-align:center;font-size:14px;}
 .footer {text-align:center; padding:25px 12px 38px; font-size:13px;color:#89a0b7; }
@@ -118,8 +130,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   .gallery {gap:8px;margin-top:23px;}
   .galleryItem {border-radius:12px;aspect-ratio:1;}
   .results {padding-top:15px;}
-  .resultCard {grid-template-columns:74px minmax(0,1fr);border-radius:14px;}
-  .resultCard > img {width:74px;min-height:0;height:100%;}
+  .resultCard {grid-template-columns:92px minmax(0,1fr);border-radius:14px;}
+  .resultImageArea {width:92px;min-height:0;}
+  .resultImageArea > img {min-height:0;}
   .resultBody {padding:11px 12px;}
   .resultTitle {align-items:flex-start;flex-direction:column;gap:6px;}
   .resultBody h4 {font-size:17px;}
@@ -127,6 +140,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   .metaRow {font-size:11px;}
   .activityColumns {grid-template-columns:1fr;gap:8px;}
   .stepsColumn {border-left:0;border-top:1px solid #e3ecf6;padding:8px 0 0;}
+  .ratingList {grid-template-columns:1fr;gap:3px;}
   .demoNotice {align-items:flex-start;}
   .footer {font-size:11px;}
 }
