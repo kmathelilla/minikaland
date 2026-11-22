@@ -32,6 +32,7 @@ import {
   type DevelopmentAreaRating,
   type GeneratedActivity,
 } from './lib/api';
+import { createRequestSequence } from './lib/requestSequence';
 
 // A négy kategória később négy külön AI skillhez kapcsolódik.
 const categoryUI: { id: Category; Icon: typeof Leaf }[] = [
@@ -88,6 +89,8 @@ export default function App() {
   const resultsRef = useRef<HTMLElement>(null);
   const activeActivityIdsRef = useRef<Set<string>>(new Set());
   const followupRequestsRef = useRef<Set<string>>(new Set());
+  const generationRequestsRef = useRef(createRequestSequence());
+  const recentActivityTitlesRef = useRef<string[]>([]);
 
   useEffect(() => {
     if (!results) return;
@@ -183,6 +186,8 @@ export default function App() {
 
     if (loading) return;
 
+    const requestId = generationRequestsRef.current.begin();
+    const previousTitles = [...recentActivityTitlesRef.current];
     activeActivityIdsRef.current.clear();
     followupRequestsRef.current.clear();
     setLoading(true);
@@ -195,11 +200,18 @@ export default function App() {
     setAdventureSheetErrors({});
 
     try {
-      const data = await recommendActivities(filters);
+      const data = await recommendActivities(filters, previousTitles);
+      if (!generationRequestsRef.current.isLatest(requestId)) return;
 
       const activityIds = new Set(data.activities.map(activity => activity.id));
       activeActivityIdsRef.current = activityIds;
       followupRequestsRef.current = new Set();
+      recentActivityTitlesRef.current = [
+        ...new Set([
+          ...previousTitles,
+          ...data.activities.map(activity => activity.name),
+        ]),
+      ].slice(-10);
       setResults(data.activities);
       setSource(data.source);
       setEvaluationLoading(
@@ -213,13 +225,16 @@ export default function App() {
         });
       }, 70);
     } catch (err) {
+      if (!generationRequestsRef.current.isLatest(requestId)) return;
       setError(
         err instanceof Error
           ? err.message
           : 'Nem sikerült a játékötletek generálása.'
       );
     } finally {
-      setLoading(false);
+      if (generationRequestsRef.current.isLatest(requestId)) {
+        setLoading(false);
+      }
     }
   }
 
@@ -422,6 +437,7 @@ export default function App() {
                 className="closeResults"
                 type="button"
                 onClick={() => {
+                  generationRequestsRef.current.begin();
                   activeActivityIdsRef.current.clear();
                   followupRequestsRef.current.clear();
                   setResults(null);

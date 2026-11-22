@@ -243,6 +243,157 @@ def test_create_activity_uses_gemini_and_returns_structured_response(
     assert calls["api_key"] == "test-key"
 
 
+def test_repeated_activity_requests_call_gemini_and_avoid_previous_idea(
+    monkeypatch,
+):
+    activities = [
+        {
+            "title": "Színösvény",
+            "subtitle": "Színpárosító keresés a szobában",
+            "materials": ["színes papír"],
+            "steps": ["Válassz színt.", "Keress tárgyat.", "Párosítsátok össze."],
+            "safety": "A keresés közben maradjon felnőtt a gyermek mellett.",
+        },
+        {
+            "title": "Mesés hangzenekar",
+            "subtitle": "Közös ritmusalkotás hétköznapi eszközökkel",
+            "materials": ["fakanál", "műanyag tál"],
+            "steps": ["Válasszatok hangszert.", "Alkossatok ritmust.", "Cseréljetek szerepet."],
+            "safety": "Csak könnyű, törhetetlen eszközöket használjatok.",
+        },
+    ]
+    model_calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            model_calls.append(kwargs)
+            activity = activities[len(model_calls) - 1]
+            return SimpleNamespace(
+                text=json.dumps(activity, ensure_ascii=False)
+            )
+
+    class FakeClient(ManagedFakeClient):
+        def __init__(self, *, api_key):
+            super().__init__()
+            self.models = FakeModels()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(main.genai, "Client", FakeClient)
+
+    request = {
+        "age": 4,
+        "duration": 20,
+        "theme": "közös játék",
+        "skills": ["montessori", "fejleszto", "kreativ", "mozgasos"],
+    }
+    first_response = client.post("/jatek", json=request)
+    second_response = client.post(
+        "/jatek",
+        json={**request, "previous_titles": [first_response.json()["title"]]},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert first_response.json()["title"] != second_response.json()["title"]
+    assert first_response.json()["skills"] == request["skills"]
+    assert second_response.json()["skills"] == request["skills"]
+    assert len(model_calls) == 2
+    assert "Színösvény" in model_calls[1]["contents"]
+    assert "ne csak a címet vagy a megfogalmazást" in model_calls[1]["contents"]
+    assert "más alaptevékenységet" in model_calls[1]["contents"]
+
+
+def test_create_activity_retries_transient_unavailable_error(
+    monkeypatch,
+    caplog,
+):
+    activity = {
+        "title": "Hangok nyomában",
+        "subtitle": "Fedezzetek fel halk és hangos ritmusokat",
+        "materials": ["műanyag tál"],
+        "steps": ["Figyeljetek a hangokra.", "Utánozzatok egyet.", "Cseréljetek szerepet."],
+        "safety": "Csak könnyű, törhetetlen eszközt használjatok.",
+    }
+    calls = []
+    delays = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise main.APIError(
+                    503,
+                    {
+                        "error": {
+                            "status": "UNAVAILABLE",
+                            "message": "Temporary high demand, key=AIza" + "A" * 35,
+                        }
+                    },
+                )
+            return SimpleNamespace(
+                text=json.dumps(activity, ensure_ascii=False)
+            )
+
+    class FakeClient(ManagedFakeClient):
+        def __init__(self, *, api_key):
+            super().__init__()
+            self.models = FakeModels()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(main.genai, "Client", FakeClient)
+    monkeypatch.setattr(main.time, "sleep", delays.append)
+
+    response = client.post(
+        "/jatek",
+        json={"age": 4, "duration": 20, "theme": "hangok"},
+    )
+
+    assert response.status_code == 200
+    assert len(calls) == 2
+    assert delays == [2]
+    assert "exception_type=" in caplog.text
+    assert "code=503" in caplog.text
+    assert "status=UNAVAILABLE" in caplog.text
+    assert "[REDACTED]" in caplog.text
+    assert "AIza" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("code", "status"),
+    [(429, "RESOURCE_EXHAUSTED"), (404, "NOT_FOUND")],
+)
+def test_create_activity_does_not_retry_quota_or_invalid_model_errors(
+    monkeypatch,
+    code,
+    status,
+):
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            raise main.APIError(
+                code,
+                {"error": {"status": status, "message": "request rejected"}},
+            )
+
+    class FakeClient(ManagedFakeClient):
+        def __init__(self, *, api_key):
+            super().__init__()
+            self.models = FakeModels()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(main.genai, "Client", FakeClient)
+
+    response = client.post(
+        "/jatek",
+        json={"age": 4, "duration": 20, "theme": "hangok"},
+    )
+
+    assert response.status_code == 502
+    assert len(calls) == 1
+
+
 def test_create_activity_rejects_out_of_range_input():
     response = client.post(
         "/jatek",

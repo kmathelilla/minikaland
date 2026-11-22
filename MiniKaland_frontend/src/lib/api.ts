@@ -10,6 +10,14 @@ export type RecommendationResponse = {
   source: 'sample' | 'gemini';
 };
 
+export type ActivityGenerationRequest = {
+  age: number;
+  duration: number;
+  theme: string;
+  skills: Category[];
+  previous_titles?: string[];
+};
+
 export type DevelopmentAreaRating = {
   name: string;
   stars: 1 | 2 | 3;
@@ -95,7 +103,8 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function recommendActivities(
-  filters: SearchFilters
+  filters: SearchFilters,
+  previousTitles: string[] = []
 ): Promise<RecommendationResponse> {
 
   // Egyelőre az első kiválasztott kategóriát használjuk.
@@ -110,6 +119,14 @@ export async function recommendActivities(
     category,
   ].filter(Boolean).join(', ');
 
+  const requestBody: ActivityGenerationRequest = {
+    age: filters.age,
+    duration: filters.duration,
+    theme,
+    skills: filters.categories,
+    previous_titles: previousTitles,
+  };
+
   const response = await fetch(
     `${API_BASE_URL.replace(/\/$/, '')}/jatek`,
     {
@@ -117,12 +134,7 @@ export async function recommendActivities(
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-      age: filters.age,
-      duration: filters.duration,
-      theme,
-      skills: filters.categories,
-      }),
+      body: JSON.stringify(requestBody),
     }
   );
 
