@@ -34,7 +34,6 @@ import {
 } from './lib/api';
 import { createRequestSequence } from './lib/requestSequence';
 
-// A négy kategória később négy külön AI skillhez kapcsolódik.
 const categoryUI: { id: Category; Icon: typeof Leaf }[] = [
   { id: 'montessori', Icon: Leaf },
   { id: 'fejleszto', Icon: BrainCircuit },
@@ -69,7 +68,6 @@ export default function App() {
   const [results, setResults] = useState<GeneratedActivity[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [source, setSource] = useState<'sample' | 'gemini'>('sample');
   const [developmentRatings, setDevelopmentRatings] = useState<
     Record<string, DevelopmentAreaRating[]>
   >({});
@@ -90,6 +88,8 @@ export default function App() {
   const activeActivityIdsRef = useRef<Set<string>>(new Set());
   const followupRequestsRef = useRef<Set<string>>(new Set());
   const generationRequestsRef = useRef(createRequestSequence());
+  const generationInFlightRef = useRef(false);
+  const adventureSheetRequestsRef = useRef<Set<string>>(new Set());
   const recentActivityTitlesRef = useRef<string[]>([]);
 
   useEffect(() => {
@@ -144,8 +144,9 @@ export default function App() {
   }
 
   async function createAdventureSheet(activity: GeneratedActivity) {
-    if (adventureSheetLoading[activity.id]) return;
+    if (adventureSheetRequestsRef.current.has(activity.id)) return;
 
+    adventureSheetRequestsRef.current.add(activity.id);
     setAdventureSheetLoading(previous => ({
       ...previous,
       [activity.id]: true,
@@ -174,6 +175,7 @@ export default function App() {
             : 'A kalandlap készítése nem sikerült.',
       }));
     } finally {
+      adventureSheetRequestsRef.current.delete(activity.id);
       setAdventureSheetLoading(previous => ({
         ...previous,
         [activity.id]: false,
@@ -184,8 +186,9 @@ export default function App() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (loading) return;
+    if (generationInFlightRef.current) return;
 
+    generationInFlightRef.current = true;
     const requestId = generationRequestsRef.current.begin();
     const previousTitles = [...recentActivityTitlesRef.current];
     activeActivityIdsRef.current.clear();
@@ -213,7 +216,6 @@ export default function App() {
         ]),
       ].slice(-10);
       setResults(data.activities);
-      setSource(data.source);
       setEvaluationLoading(
         Object.fromEntries(data.activities.map(activity => [activity.id, true]))
       );
@@ -233,6 +235,7 @@ export default function App() {
       );
     } finally {
       if (generationRequestsRef.current.isLatest(requestId)) {
+        generationInFlightRef.current = false;
         setLoading(false);
       }
     }
@@ -450,9 +453,7 @@ export default function App() {
 
             <p className="demoNotice">
               <Info size={17} />
-              {source === 'sample'
-                ? 'Demó: a javaslatok helyi mintaadatokból érkeznek.'
-                : 'A játékötleteket a Gemini AI generálta.'}
+              A játékötleteket a Gemini AI generálta.
             </p>
 
             {results.length === 0 ? (

@@ -4,10 +4,10 @@ import {
   type Category,
   type SearchFilters,
 } from './activities';
+import { assertSuccessfulResponse } from './apiErrors';
 
 export type RecommendationResponse = {
   activities: GeneratedActivity[];
-  source: 'sample' | 'gemini';
 };
 
 export type ActivityGenerationRequest = {
@@ -24,7 +24,7 @@ export type DevelopmentAreaRating = {
 };
 
 export type GeneratedActivity = Activity & {
-  developmentAreas?: DevelopmentAreaRating[];
+  skills: Category[];
 };
 
 type ActivityToolRequest = {
@@ -67,6 +67,10 @@ const categoryImages: Record<Category, string> = {
   mozgasos: '/images/galeria-raketa.jpg',
 };
 
+function apiUrl(path: string): string {
+  return `${API_BASE_URL.replace(/\/$/, '')}${path}`;
+}
+
 function activityToolRequest(activity: GeneratedActivity): ActivityToolRequest {
   return {
     title: activity.name,
@@ -75,30 +79,19 @@ function activityToolRequest(activity: GeneratedActivity): ActivityToolRequest {
     steps: activity.steps,
     age: activity.ageMin,
     duration: activity.duration,
-    skills: [activity.category],
+    skills: activity.skills,
   };
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(
-    `${API_BASE_URL.replace(/\/$/, '')}${path}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    }
-  );
-
-  if (!response.ok) {
-    const error: { detail?: string } = await response.json();
-    throw new Error(
-      error.detail ??
-      `Nem sikerült a kérés. HTTP ${response.status}`
-    );
-  }
-
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(apiUrl(path), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  await assertSuccessfulResponse(response, 'Nem sikerült a kérés.');
   return response.json();
 }
 
@@ -106,14 +99,9 @@ export async function recommendActivities(
   filters: SearchFilters,
   previousTitles: string[] = []
 ): Promise<RecommendationResponse> {
-
-  // Egyelőre az első kiválasztott kategóriát használjuk.
-  // A több skill kombinálását később a backend végzi.
   const category: Category =
     filters.categories[0] ?? 'montessori';
 
-  // A frontend szabad szövegét és kategóriáját
-  // egyelőre közös témaként küldjük.
   const theme = [
     filters.prompt.trim(),
     category,
@@ -127,27 +115,7 @@ export async function recommendActivities(
     previous_titles: previousTitles,
   };
 
-  const response = await fetch(
-    `${API_BASE_URL.replace(/\/$/, '')}/jatek`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `Nem sikerült a játékötlet generálása. HTTP ${response.status}`
-    );
-  }
-
-  const data: GeminiActivity = await response.json();
-
-  // A Gemini válaszát a React által elvárt
-  // Activity formátumra alakítjuk.
+  const data = await postJson<GeminiActivity>('/jatek', requestBody);
   const activity: GeneratedActivity = {
     id: crypto.randomUUID(),
     name: data.title,
@@ -161,21 +129,19 @@ export async function recommendActivities(
     materials: data.materials,
     steps: data.steps,
     safety: data.safety,
-    keywords: [],
+    skills: data.skills,
     image: categoryImages[category],
-    accent: '#9abbd8',
   };
 
   return {
     activities: [activity],
-    source: 'gemini',
   };
 }
 
 export async function evaluateActivity(
   activity: GeneratedActivity
 ): Promise<ActivityEvaluationResponse> {
-  return post<ActivityEvaluationResponse>(
+  return postJson<ActivityEvaluationResponse>(
     '/jatek/ertekeles',
     activityToolRequest(activity)
   );
@@ -188,24 +154,17 @@ export async function generateAdventureSheet(
     ...activityToolRequest(activity),
     safety: activity.safety,
   };
-  const response = await fetch(
-    `${API_BASE_URL.replace(/\/$/, '')}/jatek/kalandlap`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    }
+  const response = await fetch(apiUrl('/jatek/kalandlap'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  await assertSuccessfulResponse(
+    response,
+    'Nem sikerült a kalandlap készítése.',
   );
-
-  if (!response.ok) {
-    const error: { detail?: string } = await response.json();
-    throw new Error(
-      error.detail ??
-      `Nem sikerült a kalandlap készítése. HTTP ${response.status}`
-    );
-  }
 
   if (!response.headers.get('content-type')?.startsWith('application/pdf')) {
     throw new Error('A szerver nem PDF kalandlapot küldött vissza.');

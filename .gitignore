@@ -9,6 +9,10 @@
 **/__pycache__/
 *.py[cod]
 .pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+.coverage
+coverage/
 
 # React / Vite
 **/node_modules/
@@ -23,3 +27,4 @@ Thumbs.db
 
 # Logs
 *.log
+*.pdf

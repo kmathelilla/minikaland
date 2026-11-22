@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import main
+from backend import gemini_service, main, schemas
 
 
 client = TestClient(main.app)
@@ -94,7 +94,7 @@ def test_generate_adventure_sheet_returns_pdf_with_embedded_font(monkeypatch):
             client_states.append(self.state)
 
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setattr(main.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_service.genai, "Client", FakeClient)
 
     responses = [
         client.post("/jatek/kalandlap", json=ACTIVITY_CONTEXT)
@@ -112,9 +112,9 @@ def test_generate_adventure_sheet_returns_pdf_with_embedded_font(monkeypatch):
     assert b"/FontFile2" in response.content
     assert len(re.findall(rb"/Type\s+/Page\b", response.content)) == 1
     assert calls["api_key"] == "test-key"
-    assert calls["model"] == main.MODEL_NAME
-    assert calls["config"]["response_schema"] is main.AdventureSheetBonus
-    assert set(main.AdventureSheetBonus.model_fields) == {
+    assert calls["model"] == gemini_service.MODEL_NAME
+    assert calls["config"]["response_schema"] is schemas.AdventureSheetBonus
+    assert set(schemas.AdventureSheetBonus.model_fields) == {
         "title",
         "prompt",
         "twist",
@@ -153,7 +153,7 @@ def test_generate_adventure_sheet_rejects_invalid_bonus(monkeypatch):
         return instance
 
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setattr(main.genai, "Client", tracked_client)
+    monkeypatch.setattr(gemini_service.genai, "Client", tracked_client)
 
     response = client.post(
         "/jatek/kalandlap",
@@ -169,7 +169,10 @@ def test_generate_adventure_sheet_rejects_invalid_bonus(monkeypatch):
 def test_generate_adventure_sheet_closes_client_when_gemini_fails(monkeypatch):
     class FakeModels:
         def generate_content(self, **kwargs):
-            raise main.APIError(503, {"error": {"status": "UNAVAILABLE"}})
+            raise gemini_service.APIError(
+                503,
+                {"error": {"status": "UNAVAILABLE"}},
+            )
 
     clients = []
 
@@ -180,7 +183,8 @@ def test_generate_adventure_sheet_closes_client_when_gemini_fails(monkeypatch):
             clients.append(self)
 
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setattr(main.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_service.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_service.time, "sleep", lambda delay: None)
 
     response = client.post(
         "/jatek/kalandlap",
@@ -188,7 +192,8 @@ def test_generate_adventure_sheet_closes_client_when_gemini_fails(monkeypatch):
     )
 
     assert response.status_code == 502
-    assert clients[0].closed
+    assert len(clients) == gemini_service.MAX_ATTEMPTS + 1
+    assert all(client.closed for client in clients)
 
 
 def test_create_activity_uses_gemini_and_returns_structured_response(
@@ -218,7 +223,7 @@ def test_create_activity_uses_gemini_and_returns_structured_response(
             self.models = FakeModels()
 
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setattr(main.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_service.genai, "Client", FakeClient)
 
     response = client.post(
         "/jatek",
@@ -233,8 +238,11 @@ def test_create_activity_uses_gemini_and_returns_structured_response(
         "skills": [],
     }
     assert len(model_calls) == 1
-    assert all(call["model"] == main.MODEL_NAME for call in model_calls)
-    assert model_calls[0]["config"]["response_schema"] is main.ActivityContent
+    assert all(
+        call["model"] == gemini_service.MODEL_NAME
+        for call in model_calls
+    )
+    assert model_calls[0]["config"]["response_schema"] is schemas.ActivityContent
     assert model_calls[0]["config"]["response_mime_type"] == "application/json"
     assert "Kor: 4 év." in model_calls[0]["contents"]
     assert "Időtartam: 20 perc." in model_calls[0]["contents"]
@@ -278,14 +286,21 @@ def test_repeated_activity_requests_call_gemini_and_avoid_previous_idea(
             self.models = FakeModels()
 
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setattr(main.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_service.genai, "Client", FakeClient)
 
     request = {
         "age": 4,
         "duration": 20,
         "theme": "közös játék",
-        "skills": ["montessori", "fejleszto", "kreativ", "mozgasos"],
+        "skills": [
+            "montessori",
+            "fejleszto",
+            "kreativ",
+            "mozgasos",
+            "fejleszto",
+        ],
     }
+    selected_skills = ["montessori", "fejleszto", "kreativ", "mozgasos"]
     first_response = client.post("/jatek", json=request)
     second_response = client.post(
         "/jatek",
@@ -295,9 +310,15 @@ def test_repeated_activity_requests_call_gemini_and_avoid_previous_idea(
     assert first_response.status_code == 200
     assert second_response.status_code == 200
     assert first_response.json()["title"] != second_response.json()["title"]
-    assert first_response.json()["skills"] == request["skills"]
-    assert second_response.json()["skills"] == request["skills"]
+    assert first_response.json()["skills"] == selected_skills
+    assert second_response.json()["skills"] == selected_skills
     assert len(model_calls) == 2
+    first_prompt = model_calls[0]["contents"]
+    assert "önálló felfedezését" in first_prompt
+    assert "figyelmet, memóriát" in first_prompt
+    assert "képzeletet, alkotást" in first_prompt
+    assert "nagymozgásokat, koordinációt" in first_prompt
+    assert first_prompt.count("A játék fejlessze") == 1
     assert "Színösvény" in model_calls[1]["contents"]
     assert "ne csak a címet vagy a megfogalmazást" in model_calls[1]["contents"]
     assert "más alaptevékenységet" in model_calls[1]["contents"]
@@ -320,8 +341,8 @@ def test_create_activity_retries_transient_unavailable_error(
     class FakeModels:
         def generate_content(self, **kwargs):
             calls.append(kwargs)
-            if len(calls) == 1:
-                raise main.APIError(
+            if len(calls) < gemini_service.MAX_ATTEMPTS:
+                raise gemini_service.APIError(
                     503,
                     {
                         "error": {
@@ -340,8 +361,8 @@ def test_create_activity_retries_transient_unavailable_error(
             self.models = FakeModels()
 
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setattr(main.genai, "Client", FakeClient)
-    monkeypatch.setattr(main.time, "sleep", delays.append)
+    monkeypatch.setattr(gemini_service.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_service.time, "sleep", delays.append)
 
     response = client.post(
         "/jatek",
@@ -349,32 +370,44 @@ def test_create_activity_retries_transient_unavailable_error(
     )
 
     assert response.status_code == 200
-    assert len(calls) == 2
-    assert delays == [2]
-    assert "exception_type=" in caplog.text
-    assert "code=503" in caplog.text
-    assert "status=UNAVAILABLE" in caplog.text
-    assert "[REDACTED]" in caplog.text
+    assert len(calls) == gemini_service.MAX_ATTEMPTS
+    assert delays == [0.5, 1.0]
+    assert "retry_attempt=1/2" in caplog.text
+    assert "retry_attempt=2/2" in caplog.text
+    assert "model=gemini-3.5-flash-lite" in caplog.text
+    assert "duration_ms=" in caplog.text
     assert "AIza" not in caplog.text
 
 
-@pytest.mark.parametrize(
-    ("code", "status"),
-    [(429, "RESOURCE_EXHAUSTED"), (404, "NOT_FOUND")],
-)
-def test_create_activity_does_not_retry_quota_or_invalid_model_errors(
+def test_create_activity_uses_verified_model_fallback_after_unavailable(
     monkeypatch,
-    code,
-    status,
+    caplog,
 ):
-    calls = []
+    activity = {
+        "title": "Papírhíd-próba",
+        "subtitle": "Építsetek és vizsgáljatok meg egy hidat",
+        "materials": ["papír", "nagy építőkockák"],
+        "steps": ["Hajtsátok össze a papírt.", "Tegyetek rá kockát.", "Próbáljatok más hajtást."],
+        "safety": "Ne használjatok apró vagy éles tárgyakat.",
+    }
+    models = []
+    delays = []
 
     class FakeModels:
         def generate_content(self, **kwargs):
-            calls.append(kwargs)
-            raise main.APIError(
-                code,
-                {"error": {"status": status, "message": "request rejected"}},
+            models.append(kwargs["model"])
+            if kwargs["model"] == gemini_service.MODEL_NAME:
+                raise gemini_service.APIError(
+                    503,
+                    {
+                        "error": {
+                            "status": "UNAVAILABLE",
+                            "message": "Temporary high demand",
+                        }
+                    },
+                )
+            return SimpleNamespace(
+                text=json.dumps(activity, ensure_ascii=False)
             )
 
     class FakeClient(ManagedFakeClient):
@@ -383,7 +416,62 @@ def test_create_activity_does_not_retry_quota_or_invalid_model_errors(
             self.models = FakeModels()
 
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setattr(main.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_service.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_service.time, "sleep", delays.append)
+
+    response = client.post(
+        "/jatek",
+        json={"age": 4, "duration": 20, "theme": "építés"},
+    )
+
+    assert response.status_code == 200
+    assert models == [
+        gemini_service.MODEL_NAME,
+        gemini_service.MODEL_NAME,
+        gemini_service.MODEL_NAME,
+        gemini_service.FALLBACK_MODEL_NAME,
+    ]
+    assert delays == [0.5, 1.0]
+    assert "fallback_model=gemini-3.6-flash" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("code", "status"),
+    [
+        (400, "INVALID_ARGUMENT"),
+        (401, "UNAUTHENTICATED"),
+        (404, "NOT_FOUND"),
+        (429, "RESOURCE_EXHAUSTED"),
+    ],
+)
+def test_create_activity_does_not_retry_quota_or_invalid_model_errors(
+    monkeypatch,
+    caplog,
+    code,
+    status,
+):
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs)
+            raise gemini_service.APIError(
+                code,
+                {
+                    "error": {
+                        "status": status,
+                        "message": "request rejected, key=AIza" + "A" * 35,
+                    }
+                },
+            )
+
+    class FakeClient(ManagedFakeClient):
+        def __init__(self, *, api_key):
+            super().__init__()
+            self.models = FakeModels()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(gemini_service.genai, "Client", FakeClient)
 
     response = client.post(
         "/jatek",
@@ -392,6 +480,11 @@ def test_create_activity_does_not_retry_quota_or_invalid_model_errors(
 
     assert response.status_code == 502
     assert len(calls) == 1
+    assert f"status_code={code}" in caplog.text
+    assert "exception_type=" in caplog.text
+    assert "attempts=1" in caplog.text
+    assert "[REDACTED]" in caplog.text
+    assert "AIza" not in caplog.text
 
 
 def test_create_activity_rejects_out_of_range_input():
@@ -427,7 +520,7 @@ def test_create_activity_returns_gateway_error_for_invalid_gemini_response(
             self.models = FakeModels()
 
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setattr(main.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_service.genai, "Client", FakeClient)
 
     response = client.post(
         "/jatek",
@@ -477,7 +570,7 @@ def test_evaluate_activity_returns_exactly_three_structured_ratings(
             self.models = FakeModels()
 
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setattr(main.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_service.genai, "Client", FakeClient)
 
     response = client.post(
         "/jatek/ertekeles",
@@ -487,11 +580,11 @@ def test_evaluate_activity_returns_exactly_three_structured_ratings(
     assert response.status_code == 200
     assert response.json() == ratings
     assert calls["api_key"] == "test-key"
-    assert calls["model"] == main.MODEL_NAME
+    assert calls["model"] == gemini_service.MODEL_NAME
     assert calls["config"]["response_mime_type"] == "application/json"
     assert (
         calls["config"]["response_schema"]
-        is main.ActivityEvaluationResponse
+        is schemas.ActivityEvaluationResponse
     )
     assert "Színek felfedezése" in calls["contents"]
     assert "pontosan három" in calls["contents"]
@@ -519,7 +612,7 @@ def test_evaluate_activity_rejects_non_unique_or_incomplete_ratings(
             self.models = FakeModels()
 
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setattr(main.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini_service.genai, "Client", FakeClient)
 
     response = client.post(
         "/jatek/ertekeles",
